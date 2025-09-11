@@ -5,6 +5,7 @@ import json
 import io
 from shopping_assistant import ShoppingAssistant
 from openai_client import OpenAIClient
+from anthropic_client import AnthropicClient
 from data_processor import ProductDataProcessor
 
 # Set page configuration
@@ -83,13 +84,27 @@ Simply describe what you're looking for, and the assistant will recommend produc
 # Sidebar for configuration
 st.sidebar.header("Configuration")
 
-# OpenAI API key
-api_key = st.sidebar.text_input("OpenAI API Key", type="password")
+# Provider selection
+provider = st.sidebar.selectbox(
+    "Select LLM Provider",
+    ["OpenAI", "Anthropic"],
+    index=0
+)
 
-# OpenAI model selection
-openai_model = st.sidebar.selectbox(
-    "Select OpenAI Model",
-    ["gpt-3.5-turbo", "gpt-4", "gpt-4o"],
+# API key input based on provider
+if provider == "OpenAI":
+    api_key = st.sidebar.text_input("OpenAI API Key", type="password")
+    model_options = ["gpt-3.5-turbo", "gpt-4", "gpt-4o"]
+    default_model = "gpt-3.5-turbo"
+else:
+    api_key = st.sidebar.text_input("Anthropic API Key", type="password")
+    model_options = ["claude-3-sonnet-20240229", "claude-3-haiku-20240307", "claude-3-opus-20240229"]
+    default_model = "claude-3-sonnet-20240229"
+
+# Model selection
+selected_model = st.sidebar.selectbox(
+    f"Select {provider} Model",
+    model_options,
     index=0
 )
 
@@ -109,11 +124,12 @@ if api_key and uploaded_file:
     # Read uploaded file
     df = pd.read_csv(uploaded_file)
     
-    # Check for changes in model or file
-    file_key = uploaded_file.name + str(uploaded_file.size)  # Simple key to detect file change
+    # Check for changes in model, provider, or file
+    file_key = uploaded_file.name + str(uploaded_file.size)
     prev_file_key = st.session_state.get('file_key', '')
     prev_model = st.session_state.get('model', '')
-    needs_init = ('assistant' not in st.session_state) or (prev_file_key != file_key) or (prev_model != openai_model)
+    prev_provider = st.session_state.get('provider', '')
+    needs_init = ('assistant' not in st.session_state) or (prev_file_key != file_key) or (prev_model != selected_model) or (prev_provider != provider)
     
     if needs_init:
         try:
@@ -122,15 +138,19 @@ if api_key and uploaded_file:
             data_processor.load_data(df)
             data_processor.build_faiss_index()
 
-            # Initialize OpenAI client
-            openai_client = OpenAIClient(model=openai_model, api_key=api_key)
+            # Initialize appropriate LLM client
+            if provider == "OpenAI":
+                llm_client = OpenAIClient(model=selected_model, api_key=api_key)
+            else:
+                llm_client = AnthropicClient(model=selected_model, api_key=api_key)
 
             # Initialize shopping assistant
-            assistant = ShoppingAssistant(data_processor, openai_client, api_key=api_key)
+            assistant = ShoppingAssistant(data_processor, llm_client, api_key=api_key, provider=provider.lower())
             st.session_state.assistant = assistant
             st.session_state.file_key = file_key
-            st.session_state.model = openai_model
-            st.session_state.df = df  # Store for reference
+            st.session_state.model = selected_model
+            st.session_state.provider = provider
+            st.session_state.df = df
             st.sidebar.success(f"Loaded dataset: {uploaded_file.name}")
         except Exception as e:
             st.sidebar.error(f"Error loading Shopping Assistant: {str(e)}")
@@ -141,7 +161,7 @@ if api_key and uploaded_file:
         df = st.session_state.df
 else:
     if not api_key:
-        st.sidebar.warning("Please enter your OpenAI API key.")
+        st.sidebar.warning(f"Please enter your {provider} API key.")
     if not uploaded_file:
         st.sidebar.warning("Please upload a CSV dataset.")
     st.stop()
@@ -319,11 +339,12 @@ if prompt := st.chat_input("What are you looking for today?"):
 # Instructions in the sidebar
 st.sidebar.markdown("""
 ## How to use
-1. Enter your OpenAI API key
-2. Upload a CSV file with product data
-3. Select your preferred model from the dropdown
-4. Ask the assistant about products you're interested in
-5. The assistant will recommend products based on your query
+1. Select your preferred LLM provider (OpenAI or Anthropic)
+2. Enter your API key for the selected provider
+3. Upload a CSV file with product data
+4. Select your preferred model from the dropdown
+5. Ask the assistant about products you're interested in
+6. The assistant will recommend products based on your query
 
 ## Example queries:
 - "I need a new pair of running shoes"
