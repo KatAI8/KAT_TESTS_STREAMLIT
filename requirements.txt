@@ -1,0 +1,12 @@
+pandas
+numpy
+langchain
+langchain-community
+sentence-transformers
+faiss-cpu
+python-dotenv
+streamlit
+requests
+beautifulsoup4
+lxml
+openai
