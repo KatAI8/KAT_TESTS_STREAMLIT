@@ -28,18 +28,25 @@ class AnthropicClient:
         Returns:
             str: The generated response
         """
-        messages = []
-        if system_prompt:
-            messages.append({"role": "system", "content": system_prompt})
-        messages.append({"role": "user", "content": prompt})
+        messages = [{"role": "user", "content": prompt}]
         
         try:
-            response = self.client.messages.create(
-                model=self.model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens
-            )
+            # Anthropic uses system parameter separately, not in messages
+            if system_prompt:
+                response = self.client.messages.create(
+                    model=self.model,
+                    system=system_prompt,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
+            else:
+                response = self.client.messages.create(
+                    model=self.model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens
+                )
             return response.content[0].text
         except Exception as e:
             return f"Error communicating with Anthropic: {str(e)}"
