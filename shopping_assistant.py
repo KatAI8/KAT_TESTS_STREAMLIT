@@ -1,16 +1,18 @@
 from data_processor import ProductDataProcessor
 from openai_client import OpenAIClient
+from anthropic_client import AnthropicClient
 import os
 
 class ShoppingAssistant:
-    def __init__(self, data_processor_or_csv_path, openai_client_or_model="gpt-3.5-turbo", api_key=None):
+    def __init__(self, data_processor_or_csv_path, llm_client_or_model="gpt-3.5-turbo", api_key=None, provider="openai"):
         """
         Initialize the shopping assistant.
         
         Args:
             data_processor_or_csv_path: Either a ProductDataProcessor instance or a path to the product CSV file
-            openai_client_or_model: Either an OpenAIClient instance or the name of the OpenAI model to use
-            api_key: OpenAI API key
+            llm_client_or_model: Either an LLM client instance (OpenAIClient/AnthropicClient) or the name of the model to use
+            api_key: API key for the LLM provider
+            provider: LLM provider ("openai" or "anthropic")
         """
         # Handle data processor
         if isinstance(data_processor_or_csv_path, ProductDataProcessor):
@@ -21,12 +23,17 @@ class ShoppingAssistant:
             self.data_processor.load_data(data_processor_or_csv_path)
             self.data_processor.build_faiss_index()
         
-        # Handle OpenAI client
-        if isinstance(openai_client_or_model, OpenAIClient):
-            self.llm_client = openai_client_or_model
+        # Handle LLM client
+        if isinstance(llm_client_or_model, (OpenAIClient, AnthropicClient)):
+            self.llm_client = llm_client_or_model
         else:
-            # Assume it's a model name
-            self.llm_client = OpenAIClient(model=openai_client_or_model, api_key=api_key)
+            # Assume it's a model name and create the appropriate client
+            if provider.lower() == "openai":
+                self.llm_client = OpenAIClient(model=llm_client_or_model, api_key=api_key)
+            elif provider.lower() == "anthropic":
+                self.llm_client = AnthropicClient(model=llm_client_or_model, api_key=api_key)
+            else:
+                raise ValueError(f"Unsupported provider: {provider}. Use 'openai' or 'anthropic'")
         
     def get_product_recommendations(self, user_query, num_products=5):
         """
